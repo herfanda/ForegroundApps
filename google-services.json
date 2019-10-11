@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "461218824792",
+    "firebase_url": "https://foregroundservices.firebaseio.com",
+    "project_id": "foregroundservices",
+    "storage_bucket": "foregroundservices.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:461218824792:android:03815cedfd0a8d1db7402d",
+        "android_client_info": {
+          "package_name": "cartenz.yunus.foregroundapps"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "461218824792-euhgp9rn1kiqnlelb8l8h7a873ecns76.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAgr6K-_ixlA_NzVU7QvD9x8-emyTYdYjM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "461218824792-euhgp9rn1kiqnlelb8l8h7a873ecns76.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
