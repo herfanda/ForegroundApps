@@ -29,8 +29,6 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
-
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
@@ -39,65 +37,85 @@ import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.google.android.gms.tasks.OnCompleteListener;
-import com.google.android.gms.tasks.Task;
-import com.google.firebase.iid.FirebaseInstanceId;
-import com.google.firebase.iid.InstanceIdResult;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
 import cartenz.yunus.foregroundapps.adapter.ImageListAdapter;
+import cartenz.yunus.foregroundapps.controller.MainActivityController;
+import cartenz.yunus.foregroundapps.controller.SelectedImageController;
 import cartenz.yunus.foregroundapps.model.ImageModel;
 import cartenz.yunus.foregroundapps.service.ForegroundService;
 import cartenz.yunus.foregroundapps.R;
 import cartenz.yunus.foregroundapps.service.RestarterBroadCastReceiver;
+import cartenz.yunus.foregroundapps.util.Global;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final String TAG = MainActivity.class.getName();
-    private Button btnStartService;
-    private Button btnStopService;
+    public static final String TAG = MainActivity.class.getName();
 
     private static final int REQUEST_CODE = 100;
     private static String STORE_DIRECTORY;
+
+    private static String SAMPLE_FOLDER;
+
     private static final String SCREENCAP_NAME = "SCREENCAPTURE";
+
     private static final int VIRTUAL_DISPLAY_FLAGS = DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY | DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC;
+
     private static MediaProjection sMediaProjection;
 
     private MediaProjectionManager mProjectionManager;
+
     private static int IMAGES_PRODUCED;
 
     private ImageReader mImageReader;
+
     private Display mDisplay;
+
     private VirtualDisplay mVirtualDisplay;
+
     private Handler mHandler;
+
     private int mDensity;
+
     private int mWidth;
+
     private int mHeight;
+
     private int mRotation;
+
     private OrientationChangeCallback mOrientationChangeCallback;
+
     private ForegroundService foregroundService;
+
     private boolean isActiveAgain;
 
     private RecyclerView rvImage;
 
-    private File[] listFile;
+    private Button btnSelectImage;
 
-    private ArrayList imgList;
+    private File sampleFile;
+
+    private File sourceFile;
+
+    private File captureFile;
+
+    private File[] listFile;
 
     private FileOutputStream outputStream;
 
-    private String imageName;
+    private List<ImageModel> imageModelList = new ArrayList<>();
 
-    private List<ImageModel> imageModelList;
+    private MainActivityController controller;
 
+    private ImageListAdapter adapter;
 
     Context ctx;
 
@@ -111,11 +129,14 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        controller = new MainActivityController(this);
+
         // create directory
         STORE_DIRECTORY =  Environment.getExternalStorageDirectory().toString() + "/CARTENZ/";
 
         initLayout();
         initEvent();
+
 
         ActivityCompat.requestPermissions(this,new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},00);
         // call for the projection manager
@@ -128,32 +149,11 @@ public class MainActivity extends AppCompatActivity {
             foregroundService = new ForegroundService(this);
         }
 
-
         initData();
 
     }
 
-    private void initFirebase(){
-        FirebaseInstanceId.getInstance().getInstanceId()
-                .addOnCompleteListener(new OnCompleteListener<InstanceIdResult>(){
 
-                    @Override
-                    public void onComplete(@NonNull Task<InstanceIdResult> task) {
-                        if (!task.isSuccessful()){
-
-                            Toast.makeText(getApplicationContext(),"Task not success",Toast.LENGTH_LONG).show();
-
-                            return;
-                        }
-
-                        String token = task.getResult().getToken();
-                        //String msg = getString(R.string.fcm_token, token);
-                        String msg = getResources().getString(R.string.fcm_token) + token;
-                        Log.d(TAG, msg);
-                    }
-                });
-
-    }
 
     private void initLayout(){
         ctx = this;
@@ -161,8 +161,7 @@ public class MainActivity extends AppCompatActivity {
 
         isActiveAgain = getIntent().getBooleanExtra("ACTIVE_AGAIN",false);
 
-        /*btnStartService = findViewById(R.id.buttonStartService);
-        btnStopService = findViewById(R.id.buttonStopService);*/
+        btnSelectImage = findViewById(R.id.btn_select_image);
 
         rvImage = findViewById(R.id.img_recyclerview);
         rvImage.setHasFixedSize(true);
@@ -184,50 +183,64 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void initEvent(){
-       /* btnStartService.setOnClickListener(new View.OnClickListener() {
-            @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+        btnSelectImage.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                if (adapter != null){
+                    if (adapter.isSelected()){
+                        Toast.makeText(getApplicationContext(),"dipilih " +adapter.getSelectedPosition(),Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(getApplicationContext(),"Pilih gambar terlebih dahulu",Toast.LENGTH_SHORT).show();
+                    }
 
-                startService();
+                    Intent intent = new Intent(getApplicationContext(),SelectedImageActivity.class);
+                    intent.putExtra(SelectedImageController.IMAGE_POSITION,adapter.getSelectedPosition());
+                    intent.putExtra(SelectedImageController.IMAGE_PATH,adapter.getImageFile());
+                    startActivity(intent);
+
+                }
+
             }
         });
-
-        btnStopService.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                stopService();
-            }
-        });*/
-
     }
 
     private void initData(){
         prepareData();
 
         if (prepareData() != null){
-            ImageListAdapter adapter = new ImageListAdapter(this,prepareData());
+            adapter = new ImageListAdapter(this,prepareData());
             adapter.notifyDataSetChanged();
             rvImage.setAdapter(adapter);
         }
     }
 
-    private ArrayList prepareData(){
-        ArrayList imagelist = new ArrayList();
+    private List<ImageModel> prepareData(){
 
         if (STORE_DIRECTORY != null){
             File file = new File(STORE_DIRECTORY);
-            ImageModel imageModel = new ImageModel();
-            if (file.isDirectory() && file.exists()){
-                listFile = file.listFiles();
+            file.mkdir();
+
+            sampleFile = new File(STORE_DIRECTORY + "/SAMPLE/");
+            sampleFile.mkdirs();
+            SAMPLE_FOLDER = sampleFile.toString();
+
+            sourceFile = new File(STORE_DIRECTORY + "/SOURCE/");
+            sourceFile.mkdirs();
+
+            captureFile = new File(STORE_DIRECTORY + "/CAPTURE/");
+            captureFile.mkdirs();
+
+            if (sampleFile.isDirectory() && sampleFile.exists()){
+                listFile = sampleFile.listFiles();
                 for (int i = 0; i < listFile.length; i++){
-                    imagelist.add(listFile[i].getAbsolutePath());
-                    //imageModel.setImages(imagelist);
+                    ImageModel model = new ImageModel(Collections.singletonList(listFile[i].getAbsolutePath()));
+                    imageModelList.add(model);
                 }
+
             }
         }
 
-        return imagelist;
+        return imageModelList;
     }
 
 
@@ -235,7 +248,7 @@ public class MainActivity extends AppCompatActivity {
     private void startService(){
         // start capture handling thread
 
-        Toast.makeText(getApplicationContext(),"MyServiceIsRunning",Toast.LENGTH_SHORT).show();
+        Toast.makeText(getApplicationContext(),"My Service Is Running",Toast.LENGTH_SHORT).show();
 
         new Thread() {
             @Override
@@ -341,6 +354,7 @@ public class MainActivity extends AppCompatActivity {
             if (IMAGES_PRODUCED < 100){
 
                 handler.postDelayed(new Runnable() {
+                    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
                     @Override
                     public void run() {
                         try{
@@ -361,17 +375,14 @@ public class MainActivity extends AppCompatActivity {
                                 bitmap.copyPixelsFromBuffer(buffer);
                                 view.setDrawingCacheEnabled(false);
 
-                                outputStream = new FileOutputStream(STORE_DIRECTORY + "/CAPTURE_" + IMAGES_PRODUCED + ".png");
+                                outputStream = new FileOutputStream(SAMPLE_FOLDER + "/CAPTURE_" + IMAGES_PRODUCED + ".jpg");
                                 bitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream);
                                 outputStream.flush();
                                 outputStream.close();
 
-                                imageName = outputStream.toString();
-                                Log.i(TAG, "IMAGE NAME " + imageName);
-
                                 IMAGES_PRODUCED++;
 
-                                Log.e(TAG, "captured image: " + IMAGES_PRODUCED);
+                                Log.i(TAG, "captured image: " + IMAGES_PRODUCED);
                             }
 
 
@@ -394,6 +405,9 @@ public class MainActivity extends AppCompatActivity {
                                 image.close();
                             }
                         }
+
+                        checkDirectoryAndFile();
+
                     }
                 },delay);
 
@@ -403,6 +417,54 @@ public class MainActivity extends AppCompatActivity {
             }
 
         }
+    }
+
+
+    /**
+     * this method used to check directory and file
+     * also delete whole content and recreate
+     */
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    private void checkDirectoryAndFile(){
+        Log.i(TAG,"Checking Directory and File ");
+
+        File[] sampleContent = sampleFile.listFiles();
+        File[] sourceContent = sourceFile.listFiles();
+        File[] captureContent = captureFile.listFiles();
+
+        if (sampleContent.length > Global.DEFAULT_INT){
+
+            if (sourceContent.length > Global.DEFAULT_INT && captureContent.length > Global.DEFAULT_INT){
+
+                for (int i = 0; i< sourceContent.length; i++ ){
+                    Log.i(TAG,"CONTENT PATH= "+sourceContent[i]);
+                    Log.i(TAG,"SOURCE CONTENT NAME "+sourceContent[i].getName());
+                    Log.i(TAG,"CAPTURE CONTENT NAME "+sourceContent[i].getName());
+
+                    controller.compareImage(sourceContent[i],captureContent[i]);
+
+                }
+
+            } else {
+                Log.i(TAG,"=== THERE IS NO IMAGE TO COMPARE ===");
+            }
+
+        } else {
+            Log.i(TAG,"=== THERE IS NO IMAGE IN SAMPLE DIRECTORY ===");
+        }
+
+        if (controller.percentage > Global.VALUE_TO_UPLOAD){
+            Log.i(TAG,"=== UPLOAD GAMBAR ===");
+        } else {
+            Log.i(TAG,"=== KEMIRIPAN DI BAWAH 70 % ===");
+        }
+
+            //controller.deleteRecursive(sampleFile);
+
+            /*if (sMediaProjection != null) {
+                sMediaProjection.stop();
+            }*/
+
     }
 
 
@@ -474,14 +536,8 @@ public class MainActivity extends AppCompatActivity {
         //stopService();
     }
 
-    private static String getDateFromUri(Uri uri){
-        String[] split = uri.getPath().split("/");
-        String fileName = split[split.length - 1];
-        String fileNameNoExt = fileName.split("\\.")[0];
-        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        String dateString = format.format(new Date(Long.parseLong(fileNameNoExt)));
-        return dateString;
+    public interface ImageHandler{
+        void uploadImage(File file);
     }
-
 
 }

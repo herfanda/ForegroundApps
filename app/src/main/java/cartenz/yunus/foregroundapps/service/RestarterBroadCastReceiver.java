@@ -34,7 +34,7 @@ public class RestarterBroadCastReceiver extends BroadcastReceiver {
 
             Log.i("FOREGROUND SERVICE", "Foreground Service Stops! Lets Restart !!!");
         }
-        
+
     }
 
     private void startServiceByAlarm(Context context) {
