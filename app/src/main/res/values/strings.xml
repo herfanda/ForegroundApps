@@ -2,4 +2,13 @@
     <string name="app_name">Zeepos</string>
 
     <string name="fcm_token" formatted="false">Token</string>
+
+    <string name="error_communication_cancelled">{
+        \"statusCode\": 400,
+        \"ticketStatus\": \"BAD_REQUEST\",
+        \"message\": \"Bad Request\",
+        \"description\": \"Tidak dapat menghubungi server. Periksa kembali jaringan anda.\"
+    }</string>
+
+
 </resources>
