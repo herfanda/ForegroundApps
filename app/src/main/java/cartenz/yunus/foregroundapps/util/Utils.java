@@ -8,20 +8,37 @@ import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.util.Log;
 import android.view.View;
 
 import androidx.loader.content.CursorLoader;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
+import java.math.BigInteger;
+import java.security.SecureRandom;
+import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Locale;
+import java.util.Random;
+
+import cartenz.yunus.foregroundapps.helper.JsonFileHelper;
+import cartenz.yunus.foregroundapps.networks.ZeeposAPI;
 
 public class Utils {
 
     private static Utils mInstance;
 
-    private Utils(){
+    private SimpleDateFormat fileNameDateFormat;
 
+    private static final String appKey = "01234567890abcdefghijklmnopqrstuvwxyz01234567890";
+
+    private Utils(){
+        fileNameDateFormat = new SimpleDateFormat("yyyy.MM.dd_HH:mm:ss", Locale.getDefault());
     }
 
     public static Utils getInstance(){
@@ -117,4 +134,56 @@ public class Utils {
         intent.setDataAndType(uri, "image/*");
         activity.startActivity(intent);
     }
+
+    public JSONObject getZeeposUrl(Context context) {
+        Integer zeeposUrl = Global.URL_JSON;
+        try {
+            return JsonFileHelper.getInstance().readJsonFromResource(context, zeeposUrl);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        } catch (JSONException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    public IZeeposAPI getZeeposAPI(Context context){
+        return new ZeeposAPI(context);
+    }
+
+
+    public static String generateID(int length){
+
+        String CHAR_UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+        String NUMBER = "0123456789";
+
+        String DATA_FOR_RANDOM_STRING = NUMBER + CHAR_UPPER;
+
+        SecureRandom random = new SecureRandom();
+
+        if (length < 1) throw new IllegalArgumentException();
+
+        StringBuilder sb = new StringBuilder(length);
+
+        for (int i = 0; i < length; i++) {
+
+            int rndCharAt = random.nextInt(DATA_FOR_RANDOM_STRING.length());
+            char rndChar = DATA_FOR_RANDOM_STRING.charAt(rndCharAt);
+
+            sb.append(rndChar);
+        }
+
+        return sb.toString();
+    }
+
+    public String getFileNameDateFormat() {
+        return fileNameDateFormat.format(new Date());
+    }
+
+    public static String getAppKey() {
+        return appKey;
+    }
+
 }

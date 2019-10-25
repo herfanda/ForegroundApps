@@ -4,28 +4,54 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
+import android.util.Base64;
 import android.util.Log;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 
+import com.android.volley.AuthFailureError;
+import com.android.volley.Network;
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.Response;
+import com.android.volley.VolleyError;
+import com.android.volley.toolbox.BasicNetwork;
+import com.android.volley.toolbox.DiskBasedCache;
+import com.android.volley.toolbox.HurlStack;
+import com.android.volley.toolbox.StringRequest;
+import com.android.volley.toolbox.Volley;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.iid.FirebaseInstanceId;
 import com.google.firebase.iid.InstanceIdResult;
 
 import org.apache.commons.io.FileUtils;
+import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.Socket;
+import java.net.UnknownHostException;
 import java.security.SecureRandom;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+
+import javax.net.ssl.SSLSocketFactory;
 
 import cartenz.yunus.foregroundapps.R;
 import cartenz.yunus.foregroundapps.activity.MainActivity;
+import cartenz.yunus.foregroundapps.networks.ZeeposAPI;
 import cartenz.yunus.foregroundapps.util.Base32;
 import cartenz.yunus.foregroundapps.util.Global;
+import cartenz.yunus.foregroundapps.util.StorageHelper;
+import cartenz.yunus.foregroundapps.util.Utils;
+import cartenz.yunus.foregroundapps.util.VolleySingleton;
 
 public class MainActivityController implements MainActivity.ImageHandler {
 
@@ -37,9 +63,28 @@ public class MainActivityController implements MainActivity.ImageHandler {
 
     public float percentage = 0;
 
+    private String firstGenerateID;
+
+    private String secondGenerateID;
+
+    private String generateID;
+
+    private String imgname;
+
+    private String imageString;
+
     public MainActivityController(MainActivity mainActivity){
         super();
         this.activity = mainActivity;
+        initializeVolley();
+
+        if (firstGenerateID == null){
+            firstGenerateID = Utils.generateID(Global.LENGTH_VALUE);
+            generateID = firstGenerateID;
+        } else {
+            secondGenerateID = firstGenerateID;
+            generateID = secondGenerateID;
+        }
     }
 
     // delete file inside directory
@@ -53,12 +98,6 @@ public class MainActivityController implements MainActivity.ImageHandler {
 
     }
 
-    public static String generateRandomID(int length){
-        SecureRandom secureRandom = new SecureRandom();
-        byte[] token = new byte[length];
-        secureRandom.nextBytes(token);
-        return new Base32().encode(token);
-    }
 
     public float compareImage(File samplePath, File capturePath){
 
@@ -88,9 +127,6 @@ public class MainActivityController implements MainActivity.ImageHandler {
 
             float divider = (width * height);
 
-            Log.i(activity.TAG,"WIDTH = " +width);
-            Log.i(activity.TAG,"HEIGHT = " +height);
-
             for (int i = 0; i < width; i++){
                 for (int j = 0; j < height; j++){
 
@@ -105,10 +141,6 @@ public class MainActivityController implements MainActivity.ImageHandler {
             }
 
             percentage = 100 * count / divider;
-
-            Log.i(activity.TAG,"COUNT = " +count);
-
-            Log.i(activity.TAG,"DIVIDER = " +divider);
 
             Log.i(activity.TAG,"SAMPLE PIXEL = " +samplePixel);
 
@@ -125,24 +157,117 @@ public class MainActivityController implements MainActivity.ImageHandler {
 
     }
 
-    private static double pixelDiff(int samplePixel, int capturePixel){
 
-        double redSample = Color.red(samplePixel);
-        double greenSample = Color.green(samplePixel);
-        double blueSample = Color.blue(samplePixel);
+    @Override
+    public void uploadImage(File file,String name) {
 
-        double redCapture = Color.red(capturePixel);
-        double greenCapture = Color.green(capturePixel);
-        double blueCapture = Color.blue(capturePixel);
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+
+        Bitmap uploadImageBitmap = BitmapFactory.decodeFile(file.getPath());
+
+        uploadImageBitmap.compress(Bitmap.CompressFormat.JPEG, 100, stream);
+
+        imageString = Base64.encodeToString(stream.toByteArray(), Base64.DEFAULT);
+
+        imgname = name;
+
+        String url = "http://otm.zeepos.com/_api/sc/";
+        StringRequest request = new StringRequest(
+                Request.Method.POST,
+                url + generateID,
+                new Response.Listener<String>() {
+            @Override
+            public void onResponse(String response) {
+                Log.i("     ", "    ");
+                Log.i("=== SUCCESS UPLOAD ===", " "+response);
+                Log.i("=== IMAGE FILE ===", " "+file.getPath());
+                Log.i("=== IMAGE NAME ===", " "+imgname);
+                Log.i("     ", "    ");
+            }
+        }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+                Log.e("FAILED UPLOAD", ""+error.toString());
+
+            }
+        }){
+            @Override
+            protected Map<String, String> getParams() throws AuthFailureError {
+
+                Map<String, String> parameters = new HashMap<String, String>();
+
+                parameters.put("file",imgname);
+                parameters.put("image",imageString);
+                return parameters;
+            }
+        };
+
+        RequestQueue rQueue = Volley.newRequestQueue(activity);
+        rQueue.add(request);
 
 
-        return Math.abs(redCapture - redSample) + (greenCapture - greenSample )+( blueCapture + blueSample);
+
+        /*Utils.getInstance().getZeeposAPI(activity).uploadFile(
+                file,
+                name,
+                Utils.getInstance().generateID(Global.LENGTH_VALUE),
+                uploadListener(),
+                errorListener());*/
+
     }
 
 
-    @Override
-    public void uploadImage(File file) {
+    private Response.Listener<JSONObject> uploadListener(){
+        return response -> {
+            Toast.makeText(activity,"Upload Image Success",Toast.LENGTH_SHORT).show();
 
+            Log.i("SUCCESS UPLOAD", ""+response);
+
+            /*ByteArrayOutputStream stream = new ByteArrayOutputStream();
+
+            Bitmap uploadImageBitmap = BitmapFactory.decodeFile(file.getPath());
+
+            uploadImageBitmap.compress(Bitmap.CompressFormat.JPEG, 100, stream);
+
+            imageString = Base64.encodeToString(stream.toByteArray(), Base64.DEFAULT);
+
+            imgname = name;
+
+
+            StringRequest request = new StringRequest(Request.Method.POST, getSecureAPIUrl("uploadImage")+generateID, new Response.Listener<String>() {
+                @Override
+                public void onResponse(String response) {
+                    Log.i("SUCCESS UPLOAD", ""+response);
+                }
+            }, new Response.ErrorListener() {
+                @Override
+                public void onErrorResponse(VolleyError error) {
+                    Log.e("FAILED UPLOAD", ""+error.toString());
+
+                }
+            }){
+                @Override
+                protected Map<String, String> getParams() throws AuthFailureError {
+
+                    Map<String, String> parameters = new HashMap<String, String>();
+
+                    parameters.put("file",imgname);
+                    parameters.put("image",imageString);
+                    return parameters;
+                }
+            };
+
+            RequestQueue rQueue = Volley.newRequestQueue(context);
+            rQueue.add(request);
+*/
+
+        };
+    }
+
+    private Response.ErrorListener errorListener(){
+        return error -> {
+
+        };
     }
 
     private void initFirebase(){
@@ -167,12 +292,64 @@ public class MainActivityController implements MainActivity.ImageHandler {
 
     }
 
-    private static String getDateFromUri(Uri uri){
-        String[] split = uri.getPath().split("/");
-        String fileName = split[split.length - 1];
-        String fileNameNoExt = fileName.split("\\.")[0];
-        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        String dateString = format.format(new Date(Long.parseLong(fileNameNoExt)));
-        return dateString;
+    private void initializeVolley(){
+
+        Network network;
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            network = new BasicNetwork(new HurlStack());
+        }
+        else {
+            // Handle legacy Volley stack
+            HurlStack hurlStack = new HurlStack(null, new SSLSocketFactory() {
+                @Override
+                public String[] getDefaultCipherSuites() {
+                    return new String[0];
+                }
+
+                @Override
+                public String[] getSupportedCipherSuites() {
+                    return new String[0];
+                }
+
+                @Override
+                public Socket createSocket(Socket socket, String s, int i, boolean b) throws IOException {
+                    return null;
+                }
+
+                @Override
+                public Socket createSocket(String s, int i) throws IOException, UnknownHostException {
+                    return null;
+                }
+
+                @Override
+                public Socket createSocket(String s, int i, InetAddress inetAddress, int i1) throws IOException, UnknownHostException {
+                    return null;
+                }
+
+                @Override
+                public Socket createSocket(InetAddress inetAddress, int i) throws IOException {
+                    return null;
+                }
+
+                @Override
+                public Socket createSocket(InetAddress inetAddress, int i, InetAddress inetAddress1, int i1) throws IOException {
+                    return null;
+                }
+            });
+            network = new BasicNetwork(hurlStack);
+        }
+
+        String volleyPath = StorageHelper.getInstance().combinePath(
+                new String[] {
+                        StorageHelper.getInstance().getCachePath(activity).toString(),
+                        "volley"
+                }).toString();
+        RequestQueue requestQueue = new RequestQueue(new DiskBasedCache(new File(volleyPath)),
+                network);
+        requestQueue.start();
+
+        VolleySingleton.getInstance().setRequestQueue(requestQueue);
+
     }
+
 }

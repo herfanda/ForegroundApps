@@ -55,6 +55,7 @@ import cartenz.yunus.foregroundapps.service.ForegroundService;
 import cartenz.yunus.foregroundapps.R;
 import cartenz.yunus.foregroundapps.service.RestarterBroadCastReceiver;
 import cartenz.yunus.foregroundapps.util.Global;
+import cartenz.yunus.foregroundapps.util.Utils;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -109,13 +110,15 @@ public class MainActivity extends AppCompatActivity {
 
     private File[] listFile;
 
-    private FileOutputStream outputStream;
+    public FileOutputStream outputStream;
 
     private List<ImageModel> imageModelList = new ArrayList<>();
 
     private MainActivityController controller;
 
     private ImageListAdapter adapter;
+
+    private File[] captureContent;
 
     Context ctx;
 
@@ -375,14 +378,15 @@ public class MainActivity extends AppCompatActivity {
                                 bitmap.copyPixelsFromBuffer(buffer);
                                 view.setDrawingCacheEnabled(false);
 
-                                outputStream = new FileOutputStream(SAMPLE_FOLDER + "/CAPTURE_" + IMAGES_PRODUCED + ".jpg");
+                                //outputStream = new FileOutputStream(SAMPLE_FOLDER + "/CAPTURE_" + IMAGES_PRODUCED + ".jpg");
+                                outputStream = new FileOutputStream(SAMPLE_FOLDER +"/"+Utils.getInstance().getFileNameDateFormat()+"_"+IMAGES_PRODUCED+".jpg");
                                 bitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream);
                                 outputStream.flush();
                                 outputStream.close();
 
                                 IMAGES_PRODUCED++;
 
-                                Log.i(TAG, "captured image: " + IMAGES_PRODUCED);
+                                Log.i(TAG, "COUNT CAPTURE IMAGE " +IMAGES_PRODUCED);
                             }
 
 
@@ -430,18 +434,30 @@ public class MainActivity extends AppCompatActivity {
 
         File[] sampleContent = sampleFile.listFiles();
         File[] sourceContent = sourceFile.listFiles();
-        File[] captureContent = captureFile.listFiles();
+        captureContent = captureFile.listFiles();
 
         if (sampleContent.length > Global.DEFAULT_INT){
 
             if (sourceContent.length > Global.DEFAULT_INT && captureContent.length > Global.DEFAULT_INT){
 
                 for (int i = 0; i< sourceContent.length; i++ ){
-                    Log.i(TAG,"CONTENT PATH= "+sourceContent[i]);
+                    Log.i(TAG,"CONTENT PATH = "+sourceContent[i]);
                     Log.i(TAG,"SOURCE CONTENT NAME "+sourceContent[i].getName());
                     Log.i(TAG,"CAPTURE CONTENT NAME "+sourceContent[i].getName());
 
                     controller.compareImage(sourceContent[i],captureContent[i]);
+
+                    if (controller.percentage > Global.VALUE_TO_UPLOAD){
+
+                        //Utils.getInstance().getZeeposAPI(this).uploadFile();
+
+                        controller.uploadImage(captureContent[i],captureContent[i].getName());
+
+                        Log.i(TAG,"=== UPLOADING IMAGE TO SERVER ===");
+
+                    } else {
+                        Log.i(TAG,"=== KEMIRIPAN DI BAWAH 70 % ===");
+                    }
 
                 }
 
@@ -451,12 +467,6 @@ public class MainActivity extends AppCompatActivity {
 
         } else {
             Log.i(TAG,"=== THERE IS NO IMAGE IN SAMPLE DIRECTORY ===");
-        }
-
-        if (controller.percentage > Global.VALUE_TO_UPLOAD){
-            Log.i(TAG,"=== UPLOAD GAMBAR ===");
-        } else {
-            Log.i(TAG,"=== KEMIRIPAN DI BAWAH 70 % ===");
         }
 
             //controller.deleteRecursive(sampleFile);
@@ -537,7 +547,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public interface ImageHandler{
-        void uploadImage(File file);
+        void uploadImage(File file,String fileName);
     }
 
 }
